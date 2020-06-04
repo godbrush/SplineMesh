@@ -220,15 +220,14 @@ namespace SplineMesh {
                 bentVertices.Select(b => b.normal));
         }
 
-        private SourceMesh GetCurrentRepeatSource(int repeatStep)
+        private ref SourceMesh GetCurrentRepeatSource(int repeatStep)
         {
-            var currentSource = source;
             if (null != extraSources && 0 < extraSources.Length)
             {
                 int key = repeatStep % (extraSources.Length + 1);
-                if (0 < key) return extraSources[key - 1];
+                if (0 < key) return ref extraSources[key - 1];
             }
-            return currentSource;
+            return ref source;
         }
 
         private IEnumerable<Vector2> MakeSafeUV(Vector2[] uv, int verticesCount)
