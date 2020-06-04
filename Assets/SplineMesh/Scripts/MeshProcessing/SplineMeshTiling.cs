@@ -19,8 +19,15 @@ namespace SplineMesh {
         private Spline spline = null;
         private bool toUpdate = false;
 
+        [Serializable]
+        public struct ExtraMesh {
+            public Mesh mesh;
+            public Material material;
+        }
+
         [Tooltip("Mesh to bend along the spline.")]
         public Mesh mesh;
+        public ExtraMesh[] extraMeshes;
         [Tooltip("Material to apply on the bent mesh.")]
         public Material material;
         [Tooltip("Physic material to apply on the bent mesh.")]
@@ -119,6 +126,23 @@ namespace SplineMesh {
                 .Translate(translation)
                 .Rotate(Quaternion.Euler(rotation))
                 .Scale(scale);
+            if (null != extraMeshes && 0 < extraMeshes.Length)
+            {
+                List<Material> materials = new List<Material>();
+                materials.Add(material);
+
+                SourceMesh[] extraSourceMeshes = new SourceMesh[extraMeshes.Length];
+                for (int i = 0; i < extraMeshes.Length; ++i)
+                {
+                    extraSourceMeshes[i] = SourceMesh.Build(extraMeshes[i].mesh)
+                        .Translate(translation)
+                        .Rotate(Quaternion.Euler(rotation))
+                        .Scale(scale);
+                    materials.Add(extraMeshes[i].material);
+                }
+                mb.ExtraSources = extraSourceMeshes;
+                res.GetComponent<MeshRenderer>().materials = materials.ToArray();
+            }
             mb.Mode = mode;
             return res;
         }

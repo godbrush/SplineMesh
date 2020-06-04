@@ -37,6 +37,18 @@ namespace SplineMesh {
             }
         }
         
+        private SourceMesh[] extraSources;
+        public SourceMesh[] ExtraSources
+        {
+            get { return extraSources; }
+            set
+            {
+                if (value == extraSources) return;
+                SetDirty();
+                extraSources = value;
+            }
+        }
+
         private FillingMode mode = FillingMode.StretchToInterval;
         /// <summary>
         /// The scaling mode along the spline
@@ -208,15 +220,65 @@ namespace SplineMesh {
                 bentVertices.Select(b => b.normal));
         }
 
+        private SourceMesh GetCurrentRepeatSource(int repeatStep)
+        {
+            var currentSource = source;
+            if (null != extraSources && 0 < extraSources.Length)
+            {
+                int key = repeatStep % (extraSources.Length + 1);
+                if (0 < key) return extraSources[key - 1];
+            }
+            return currentSource;
+        }
+
+        private IEnumerable<Vector2> MakeSafeUV(Vector2[] uv, int verticesCount)
+        {
+            if (null == uv || verticesCount != uv.Length)
+            {
+                return Enumerable.Repeat(Vector2.zero, verticesCount);
+            }
+            return uv;
+        }
+
         private void FillRepeat() {
-            float intervalLength = useSpline?
+            float intervalLength = useSpline ?
                 (intervalEnd == 0 ? spline.Length : intervalEnd) - intervalStart :
                 curve.Length;
-            int repetitionCount = Mathf.FloorToInt(intervalLength / source.Length);
+            int repetitionCount = 0;
 
+            for (float d = 0; d <= intervalLength;)
+            {
+                d += GetCurrentRepeatSource(repetitionCount).Length;
+                if (d < intervalLength)
+                {
+                    ++repetitionCount;
+                }
+            }
+
+            bool[] useUV = new bool[8];
+            useUV[0] = null != source.Mesh.uv && 0 < source.Mesh.uv.Length;
+            useUV[1] = null != source.Mesh.uv2 && 0 < source.Mesh.uv2.Length;
+            useUV[2] = null != source.Mesh.uv3 && 0 < source.Mesh.uv3.Length;
+            useUV[3] = null != source.Mesh.uv4 && 0 < source.Mesh.uv4.Length;
+            useUV[4] = null != source.Mesh.uv5 && 0 < source.Mesh.uv5.Length;
+            useUV[5] = null != source.Mesh.uv6 && 0 < source.Mesh.uv6.Length;
+            useUV[6] = null != source.Mesh.uv7 && 0 < source.Mesh.uv7.Length;
+            useUV[7] = null != source.Mesh.uv8 && 0 < source.Mesh.uv8.Length;
+
+            foreach (var extraSource in extraSources)
+            {
+                useUV[0] |= null != extraSource.Mesh.uv && 0 < extraSource.Mesh.uv.Length;
+                useUV[1] |= null != extraSource.Mesh.uv2 && 0 < extraSource.Mesh.uv2.Length;
+                useUV[2] |= null != extraSource.Mesh.uv3 && 0 < extraSource.Mesh.uv3.Length;
+                useUV[3] |= null != extraSource.Mesh.uv4 && 0 < extraSource.Mesh.uv4.Length;
+                useUV[4] |= null != extraSource.Mesh.uv5 && 0 < extraSource.Mesh.uv5.Length;
+                useUV[5] |= null != extraSource.Mesh.uv6 && 0 < extraSource.Mesh.uv6.Length;
+                useUV[6] |= null != extraSource.Mesh.uv7 && 0 < extraSource.Mesh.uv7.Length;
+                useUV[7] |= null != extraSource.Mesh.uv8 && 0 < extraSource.Mesh.uv8.Length;
+            }
 
             // building triangles and UVs for the repeated mesh
-            var triangles = new List<int>();
+            var trianglesDict = new Dictionary<int, List<int>>();
             var uv = new List<Vector2>();
             var uv2 = new List<Vector2>();
             var uv3 = new List<Vector2>();
@@ -225,31 +287,68 @@ namespace SplineMesh {
             var uv6 = new List<Vector2>();
             var uv7 = new List<Vector2>();
             var uv8 = new List<Vector2>();
+            int vertexCount = 0;
             for (int i = 0; i < repetitionCount; i++) {
-                foreach (var index in source.Triangles) {
-                    triangles.Add(index + source.Vertices.Count * i);
+                var currentSource = GetCurrentRepeatSource(i);
+
+                int dictKey = i % (ExtraSources.Length + 1);
+
+                if (false == trianglesDict.ContainsKey(dictKey))
+                {
+                    trianglesDict.Add(dictKey, new List<int>());
                 }
-                uv.AddRange(source.Mesh.uv);
-                uv2.AddRange(source.Mesh.uv2);
-                uv3.AddRange(source.Mesh.uv3);
-                uv4.AddRange(source.Mesh.uv4);
+
+                List<int> triangles = trianglesDict[dictKey];
+
+                foreach (var index in currentSource.Triangles) {
+                    triangles.Add(index + vertexCount);
+                }
+                if (useUV[0])
+                {
+                    uv.AddRange(MakeSafeUV(currentSource.Mesh.uv, currentSource.Vertices.Count));
+                }
+                if (useUV[1])
+                {
+                    uv2.AddRange(MakeSafeUV(currentSource.Mesh.uv2, currentSource.Vertices.Count));
+                }
+                if (useUV[2])
+                {
+                    uv3.AddRange(MakeSafeUV(currentSource.Mesh.uv3, currentSource.Vertices.Count));
+                }
+                if (useUV[3])
+                {
+                    uv4.AddRange(MakeSafeUV(currentSource.Mesh.uv4, currentSource.Vertices.Count));
+                }
 #if UNITY_2018_2_OR_NEWER
-                uv5.AddRange(source.Mesh.uv5);
-                uv6.AddRange(source.Mesh.uv6);
-                uv7.AddRange(source.Mesh.uv7);
-                uv8.AddRange(source.Mesh.uv8);
+                if (useUV[4])
+                {
+                    uv5.AddRange(MakeSafeUV(currentSource.Mesh.uv5, currentSource.Vertices.Count));
+                }
+                if (useUV[5])
+                {
+                    uv6.AddRange(MakeSafeUV(currentSource.Mesh.uv6, currentSource.Vertices.Count));
+                }
+                if (useUV[6])
+                {
+                    uv7.AddRange(MakeSafeUV(currentSource.Mesh.uv7, currentSource.Vertices.Count));
+                }
+                if (useUV[7])
+                {
+                    uv8.AddRange(MakeSafeUV(currentSource.Mesh.uv8, currentSource.Vertices.Count));
+                }
 #endif
+                vertexCount += currentSource.Vertices.Count;
             }
 
             // computing vertices and normals
-            var bentVertices = new List<MeshVertex>(source.Vertices.Count);
+            var bentVertices = new List<MeshVertex>(vertexCount);
             float offset = 0;
             for (int i = 0; i < repetitionCount; i++) {
-
+                var currentSource = GetCurrentRepeatSource(i);
                 sampleCache.Clear();
                 // for each mesh vertex, we found its projection on the curve
-                foreach (var vert in source.Vertices) {
-                    float distance = vert.position.x - source.MinX + offset;
+                foreach (var vert in currentSource.Vertices) {
+                    float distance = vert.position.x - currentSource.MinX + offset;
                     CurveSample sample;
                     if (!sampleCache.TryGetValue(distance, out sample)) {
                         if (!useSpline) {
@@ -258,9 +357,9 @@ namespace SplineMesh {
                         } else {
                             float distOnSpline = intervalStart + distance;
                             //if (true) { //spline.isLoop) {
-                                while (distOnSpline > spline.Length) {
-                                    distOnSpline -= spline.Length;
-                                }
+                            while (distOnSpline > spline.Length) {
+                                distOnSpline -= spline.Length;
+                            }
                             //} else if (distOnSpline > spline.Length) {
                             //    continue;
                             //}
@@ -270,22 +369,35 @@ namespace SplineMesh {
                     }
                     bentVertices.Add(sample.GetBent(vert));
                 }
-                offset += source.Length;
+                offset += currentSource.Length;
             }
 
-            MeshUtility.Update(result,
-                source.Mesh,
-                triangles,
-                bentVertices.Select(b => b.position),
-                bentVertices.Select(b => b.normal),
-                uv,
-                uv2,
-                uv3,
-                uv4,
-                uv5,
-                uv6,
-                uv7,
-                uv8);
+            result.Clear();
+
+            result.hideFlags = source.Mesh.hideFlags;
+            result.indexFormat = source.Mesh.indexFormat;
+
+            result.vertices = bentVertices.Select(b => b.position).ToArray();
+            result.normals = bentVertices.Select(b => b.normal).ToArray();
+            if (0 < uv.Count) result.SetUVs(0, uv);
+            if (0 < uv2.Count) result.SetUVs(1, uv2);
+            if (0 < uv3.Count) result.SetUVs(2, uv3);
+            if (0 < uv4.Count) result.SetUVs(3, uv4);
+            if (0 < uv5.Count) result.SetUVs(4, uv5);
+            if (0 < uv6.Count) result.SetUVs(5, uv6);
+            if (0 < uv7.Count) result.SetUVs(6, uv7);
+            if (0 < uv8.Count) result.SetUVs(7, uv8);
+
+            result.subMeshCount = trianglesDict.Count;
+            int subMeshIndex = 0;
+            foreach(var triangles in trianglesDict.Values)
+            {
+                result.SetTriangles(triangles, subMeshIndex);
+                ++subMeshIndex;
+            }
+
+            result.RecalculateBounds();
+            result.RecalculateTangents();
         }
 
         private void FillStretch() {
