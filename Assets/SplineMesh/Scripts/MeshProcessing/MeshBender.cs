@@ -220,12 +220,28 @@ namespace SplineMesh {
                 bentVertices.Select(b => b.normal));
         }
 
-        private ref SourceMesh GetCurrentRepeatSource(int repeatStep)
+        private ref SourceMesh GetCurrentRepeatSource(int repeatStep, int repetitionCount)
         {
+            UnityEngine.Random.InitState(repeatStep);
             if (null != extraSources && 0 < extraSources.Length)
             {
-                int key = repeatStep % (extraSources.Length + 1);
-                if (0 < key) return ref extraSources[key - 1];
+                for(int i = 0; i < extraSources.Length; ++i)
+                {
+                    ref SourceMesh extraSource = ref extraSources[i];
+                    switch(extraSource.placeType)
+                    {
+                        case MeshPlaceType.Sequence:
+                            {
+                                int seqIndex = Mathf.RoundToInt(extraSource.placeWeight);
+                                if (0 <= Mathf.Sign(extraSource.placeWeight) && seqIndex == repeatStep) return ref extraSource;
+                                if (-0 >= Mathf.Sign(extraSource.placeWeight) && seqIndex == (repeatStep - (repetitionCount - 1))) return ref extraSource;
+                            }
+                            break;
+                        case MeshPlaceType.Random:
+                            if (UnityEngine.Random.value <= extraSource.placeWeight) return ref extraSource;
+                            break;
+                    }
+                }
             }
             return ref source;
         }
@@ -247,7 +263,7 @@ namespace SplineMesh {
 
             for (float d = 0; d <= intervalLength;)
             {
-                d += GetCurrentRepeatSource(repetitionCount).Length;
+                d += GetCurrentRepeatSource(repetitionCount, -1).Length;
                 if (d < intervalLength)
                 {
                     ++repetitionCount;
@@ -264,16 +280,19 @@ namespace SplineMesh {
             useUV[6] = null != source.Mesh.uv7 && 0 < source.Mesh.uv7.Length;
             useUV[7] = null != source.Mesh.uv8 && 0 < source.Mesh.uv8.Length;
 
-            foreach (var extraSource in extraSources)
+            if (extraSources != null)
             {
-                useUV[0] |= null != extraSource.Mesh.uv && 0 < extraSource.Mesh.uv.Length;
-                useUV[1] |= null != extraSource.Mesh.uv2 && 0 < extraSource.Mesh.uv2.Length;
-                useUV[2] |= null != extraSource.Mesh.uv3 && 0 < extraSource.Mesh.uv3.Length;
-                useUV[3] |= null != extraSource.Mesh.uv4 && 0 < extraSource.Mesh.uv4.Length;
-                useUV[4] |= null != extraSource.Mesh.uv5 && 0 < extraSource.Mesh.uv5.Length;
-                useUV[5] |= null != extraSource.Mesh.uv6 && 0 < extraSource.Mesh.uv6.Length;
-                useUV[6] |= null != extraSource.Mesh.uv7 && 0 < extraSource.Mesh.uv7.Length;
-                useUV[7] |= null != extraSource.Mesh.uv8 && 0 < extraSource.Mesh.uv8.Length;
+                foreach (var extraSource in extraSources)
+                {
+                    useUV[0] |= null != extraSource.Mesh.uv && 0 < extraSource.Mesh.uv.Length;
+                    useUV[1] |= null != extraSource.Mesh.uv2 && 0 < extraSource.Mesh.uv2.Length;
+                    useUV[2] |= null != extraSource.Mesh.uv3 && 0 < extraSource.Mesh.uv3.Length;
+                    useUV[3] |= null != extraSource.Mesh.uv4 && 0 < extraSource.Mesh.uv4.Length;
+                    useUV[4] |= null != extraSource.Mesh.uv5 && 0 < extraSource.Mesh.uv5.Length;
+                    useUV[5] |= null != extraSource.Mesh.uv6 && 0 < extraSource.Mesh.uv6.Length;
+                    useUV[6] |= null != extraSource.Mesh.uv7 && 0 < extraSource.Mesh.uv7.Length;
+                    useUV[7] |= null != extraSource.Mesh.uv8 && 0 < extraSource.Mesh.uv8.Length;
+                }
             }
 
             // building triangles and UVs for the repeated mesh
@@ -288,9 +307,9 @@ namespace SplineMesh {
             var uv8 = new List<Vector2>();
             int vertexCount = 0;
             for (int i = 0; i < repetitionCount; i++) {
-                var currentSource = GetCurrentRepeatSource(i);
+                var currentSource = GetCurrentRepeatSource(i, repetitionCount);
 
-                int dictKey = i % (ExtraSources.Length + 1);
+                int dictKey = i % (null == ExtraSources ? 1 : ExtraSources.Length + 1);
 
                 if (false == trianglesDict.ContainsKey(dictKey))
                 {
@@ -343,7 +362,7 @@ namespace SplineMesh {
             var bentVertices = new List<MeshVertex>(vertexCount);
             float offset = 0;
             for (int i = 0; i < repetitionCount; i++) {
-                var currentSource = GetCurrentRepeatSource(i);
+                var currentSource = GetCurrentRepeatSource(i, repetitionCount);
                 sampleCache.Clear();
                 // for each mesh vertex, we found its projection on the curve
                 foreach (var vert in currentSource.Vertices) {

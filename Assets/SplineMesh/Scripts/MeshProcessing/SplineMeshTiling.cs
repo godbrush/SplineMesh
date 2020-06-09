@@ -23,6 +23,11 @@ namespace SplineMesh {
         public struct ExtraMesh {
             public Mesh mesh;
             public Material material;
+            public MeshPlaceType placeType;
+            public float placeWeight;
+            public bool useCustomTRS;
+            public Vector3 customTranslation;
+            public Vector3 customRotation;
         }
 
         [Tooltip("Mesh to bend along the spline.")]
@@ -134,12 +139,23 @@ namespace SplineMesh {
                 SourceMesh[] extraSourceMeshes = new SourceMesh[extraMeshes.Length];
                 for (int i = 0; i < extraMeshes.Length; ++i)
                 {
+                    var T = translation;
+                    var R = rotation;
+                    var S = scale;
+                    if (extraMeshes[i].useCustomTRS)
+                    {
+                        T = extraMeshes[i].customTranslation;
+                        R = extraMeshes[i].customRotation;
+                    }
                     extraSourceMeshes[i] = SourceMesh.Build(extraMeshes[i].mesh)
-                        .Translate(translation)
-                        .Rotate(Quaternion.Euler(rotation))
-                        .Scale(scale);
+                        .Translate(T)
+                        .Rotate(Quaternion.Euler(R))
+                        .Scale(S);
+                    extraSourceMeshes[i].placeType = extraMeshes[i].placeType;
+                    extraSourceMeshes[i].placeWeight = extraMeshes[i].placeWeight;
                     materials.Add(extraMeshes[i].material);
                 }
+                Array.Sort(extraSourceMeshes, (x, y) => (int) x.placeType - (int) y.placeType);
                 mb.ExtraSources = extraSourceMeshes;
                 res.GetComponent<MeshRenderer>().materials = materials.ToArray();
             }

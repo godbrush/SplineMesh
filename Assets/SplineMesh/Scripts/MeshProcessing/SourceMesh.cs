@@ -4,6 +4,14 @@ using System.Collections.Generic;
 using System;
 
 namespace SplineMesh {
+
+    public enum MeshPlaceType
+    {
+        None,
+        Sequence,
+        Random,
+    }
+
     /// <summary>
     /// This class returns a transformed version of a given source mesh, plus others
     /// informations to help bending the mesh along a curve.
@@ -18,6 +26,8 @@ namespace SplineMesh {
         private Vector3 scale;
 
         internal Mesh Mesh { get; }
+        internal MeshPlaceType placeType;
+        internal float placeWeight;
 
         private List<MeshVertex> vertices;
         internal List<MeshVertex> Vertices {
@@ -65,6 +75,8 @@ namespace SplineMesh {
             triangles = null;
             minX = 0;
             length = 0;
+            placeType = MeshPlaceType.None;
+            placeWeight = 0;
         }
 
         /// <summary>
@@ -80,6 +92,8 @@ namespace SplineMesh {
             triangles = null;
             minX = 0;
             length = 0;
+            placeType = other.placeType;
+            placeWeight = other.placeWeight;
         }
 
         public static SourceMesh Build(Mesh mesh) {
