@@ -309,11 +309,12 @@ namespace SplineMesh {
             for (int i = 0; i < repetitionCount; i++) {
                 var currentSource = GetCurrentRepeatSource(i, repetitionCount);
 
-                int dictKey = i % (null == ExtraSources ? 1 : ExtraSources.Length + 1);
+                int dictKey = currentSource.GetHashCode();
 
                 if (false == trianglesDict.ContainsKey(dictKey))
                 {
-                    trianglesDict.Add(dictKey, new List<int>());
+                    var triangleList = new List<int>(currentSource.Triangles.Length);
+                    trianglesDict.Add(dictKey, triangleList);
                 }
 
                 List<int> triangles = trianglesDict[dictKey];
@@ -390,10 +391,11 @@ namespace SplineMesh {
                 offset += currentSource.Length;
             }
 
+            //TODO: If total vertices count is over 65535, have to split mesh.
             result.Clear();
 
             result.hideFlags = source.Mesh.hideFlags;
-            result.indexFormat = source.Mesh.indexFormat;
+            result.indexFormat = UnityEngine.Rendering.IndexFormat.UInt16;
 
             result.vertices = bentVertices.Select(b => b.position).ToArray();
             result.normals = bentVertices.Select(b => b.normal).ToArray();

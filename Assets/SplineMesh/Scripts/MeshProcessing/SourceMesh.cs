@@ -176,11 +176,22 @@ namespace SplineMesh {
             return Mesh == other.Mesh &&
                 translation == other.translation &&
                 rotation == other.rotation &&
-                scale == other.scale;
+                scale == other.scale &&
+                placeType == other.placeType &&
+                placeWeight == other.placeWeight;
         }
 
         public override int GetHashCode() {
-            return base.GetHashCode();
+            int hashCode = base.GetHashCode();
+
+            hashCode ^= Mesh.GetHashCode();
+            hashCode ^= translation.GetHashCode();
+            hashCode ^= rotation.GetHashCode();
+            hashCode ^= scale.GetHashCode();
+            hashCode ^= placeType.GetHashCode();
+            hashCode ^= placeWeight.GetHashCode();
+
+            return hashCode;
         }
 
         public static bool operator ==(SourceMesh sm1, SourceMesh sm2) {
