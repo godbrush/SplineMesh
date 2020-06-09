@@ -1,0 +1,14 @@
+{
+  "name": "com.godbrush.splinemesh",
+  "description": "fork of benoit-dumas/SplineMesh",
+  "version": "1.0.0",
+  "unity": "2019.3",
+  "unityRelease": "11f1",
+  "displayName": "SplineMesh",
+  "keywords": [
+    "graphics",
+    "performance",
+    "rendering",
+    "mobile"
+  ]
+}
