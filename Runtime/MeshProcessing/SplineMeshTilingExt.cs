@@ -34,6 +34,16 @@ namespace SplineMesh {
 
         public PartInfo[] meshInfos;
 
+        public int PerChunkMaxVertices = 65535;
+        public float PerChunkMaxLength = 10;
+        public int Seed = -1;
+
+        [Tooltip("If true, a mesh collider will be generated.")]
+        public bool generateCollider = true;
+
+        [Tooltip("If true, the mesh will be bent on play mode. If false, the bent mesh will be kept from the editor mode, allowing lighting baking.")]
+        public bool updateInPlayMode;
+
         private Spline spline = null;
 
         private bool toUpdate = false;
@@ -51,7 +61,7 @@ namespace SplineMesh {
         }
 
         private void Update() {
-            if (Application.isPlaying) return;
+            if (false == updateInPlayMode && Application.isPlaying) return;
 
             if (toUpdate) {
                 toUpdate = false;
@@ -81,11 +91,15 @@ namespace SplineMesh {
             }
         }
 
-        struct MeshChunk {
+        class MeshChunk {
             public List<MeshVertex> bentVertices;
             public List<int> triangles;
             public List<Vector2>[] uv;
+            public float length;
         }
+
+        [SerializeField]
+        private List<Transform> generatedChildren = new List<Transform>();
 
         public void CreateMeshes() {
             if (null == spline || null == meshInfos || 0 == meshInfos.Length) return;
@@ -94,16 +108,58 @@ namespace SplineMesh {
 
             decisionParts.Clear();
 
-            for(float d = 0; d <= spline.Length && decisionParts.Count < 10000;) {
-                int sourceMeshIndex = 0;
+            Random.InitState(Seed);
 
-                d += sourceMeshes[sourceMeshIndex].Length;
+            for(float d = 0; d <= spline.Length && decisionParts.Count < 1000;) {
+                int sourceMeshIndex = -1;
+
+                // Sequence
+                if (-1 == sourceMeshIndex) {
+                    // TODO: Reverse
+                    sourceMeshIndex = System.Array.FindIndex(meshInfos, info =>
+                    {
+                        if (PlaceType.Sequence == info.placeType)
+                        {
+                            int seqIndex = Mathf.RoundToInt(info.placeValue);
+                            return seqIndex == decisionParts.Count;
+                        }
+                        return false;
+                    });
+                }
+                // Random
+                if (-1 == sourceMeshIndex) {
+                    sourceMeshIndex = System.Array.FindIndex(meshInfos, info =>
+                    {
+                        if (PlaceType.Random == info.placeType)
+                        {
+                            return Random.value <= info.placeValue;
+                        }
+                        return false;
+                    });
+                }
+                // None
+                if (-1 == sourceMeshIndex) {
+                    sourceMeshIndex = System.Array.FindIndex(meshInfos, info => PlaceType.None == info.placeType);
+                }
+
+                if (-1 == sourceMeshIndex) {
+                    sourceMeshIndex = 0;
+                }
+
+                float sourceMeshLength = sourceMeshes[sourceMeshIndex].Length;
+
+                if (Mathf.Approximately(sourceMeshLength, 0)) {
+                    Debug.LogError("SourceMesh.Length is must larger than zero.");
+                    return;
+                }
+
+                d += sourceMeshLength;
                 if (d <= spline.Length) {
                     decisionParts.Add(sourceMeshIndex);
                 }
             }
 
-            var meshChunkDict = new Dictionary<Material, MeshChunk>();
+            var meshChunkDict = new Dictionary<Material, List<MeshChunk>>();
             var sampleCache = new Dictionary<float, CurveSample>();
 
             float offset = 0;
@@ -112,16 +168,25 @@ namespace SplineMesh {
                 int index = decisionParts[i];
 
                 if (false == meshChunkDict.ContainsKey(meshInfos[index].material)) {
-                    int predictVertexCount = decisionParts.Sum(idx => meshInfos[idx].material == meshInfos[index].material ? meshInfos[idx].mesh.vertexCount : 0);
+                    meshChunkDict.Add(meshInfos[index].material, new List<MeshChunk>());
+                }
 
-                    meshChunkDict.Add(meshInfos[index].material, new MeshChunk() {
-                        bentVertices = new List<MeshVertex>(predictVertexCount),
-                        triangles = new List<int>(predictVertexCount / 3),
+                var meshChunkList = meshChunkDict[meshInfos[index].material];
+
+                int vertexCount = meshInfos[index].mesh.vertices.Length;
+
+                bool isReachedMaxVertices = 0 < meshChunkList.Count && PerChunkMaxVertices < (meshChunkList.Last().bentVertices.Count + vertexCount);
+                bool isReachedMaxLength = 0 < meshChunkList.Count && PerChunkMaxLength < meshChunkList.Last().length;
+                if (0 == meshChunkList.Count || isReachedMaxVertices || isReachedMaxLength) {
+                    meshChunkList.Add(new MeshChunk() {
+                        bentVertices = new List<MeshVertex>(vertexCount),
+                        triangles = new List<int>(vertexCount / 3),
                         uv = new List<Vector2>[8],
+                        length = 0
                     });
                 }
 
-                var meshChunk = meshChunkDict[meshInfos[index].material];
+                var meshChunk = meshChunkList.Last();
 
                 ref SourceMesh sourceMesh = ref sourceMeshes[index];
 
@@ -155,14 +220,87 @@ namespace SplineMesh {
                 }
 
                 offset += sourceMeshes[index].Length;
+                meshChunk.length += sourceMeshes[index].Length;
             }
+
+            List<Transform> newGeneratedTransform = new List<Transform>();
 
             foreach(var pair in meshChunkDict) {
-                var meshChunk = pair.Value;
-                // TODO:
+                var material = pair.Key;
+                var meshChunkList = pair.Value;
+
+                for (int segment = 0; segment < meshChunkList.Count; ++segment) {
+                    var meshChunk = meshChunkList[segment];
+
+                    string chunkName = $"{name}-{material.name}-{segment + 1}";
+                    Transform chunkTransform = transform.Find(chunkName);
+                    if (null == chunkTransform)
+                    {
+                        var go = UOUtility.Create(chunkName,
+                            gameObject,
+                            typeof(MeshFilter),
+                            typeof(MeshRenderer),
+                            typeof(MeshCollider));
+                        chunkTransform = go.transform;
+                    }
+                    newGeneratedTransform.Add(chunkTransform);
+                    generatedChildren.Remove(chunkTransform);
+
+                    chunkTransform.gameObject.isStatic = false == updateInPlayMode;
+
+                    var meshFilter = chunkTransform.GetComponent<MeshFilter>();
+                    var meshCollider = chunkTransform.GetComponent<MeshCollider>();
+                    var meshRenderer = chunkTransform.GetComponent<MeshRenderer>();
+
+                    Mesh result = meshFilter.sharedMesh;
+                    if (null == result || result.name != chunkName)
+                    {
+                        result = new Mesh();
+                    }
+                    else if(result.vertexCount != meshChunk.bentVertices.Count)
+                    {
+                        result.Clear();
+                    }
+
+                    result.name = chunkName;
+                    result.hideFlags = HideFlags.HideInHierarchy;
+                    result.indexFormat = UnityEngine.Rendering.IndexFormat.UInt16;
+
+                    result.SetVertices(meshChunk.bentVertices.Select(b => b.position).ToList());
+                    result.SetNormals(meshChunk.bentVertices.Select(b => b.normal).ToList());
+
+                    for (int channel = 0; channel < meshChunk.uv.Length; ++channel)
+                    {
+                        if (null != meshChunk.uv[channel] && 0 < meshChunk.uv[channel].Count)
+                        {
+                            result.SetUVs(channel, meshChunk.uv[channel]);
+                        }
+                    }
+
+                    result.SetTriangles(meshChunk.triangles, 0, false);
+
+                    result.RecalculateBounds();
+                    result.RecalculateTangents();
+
+                    meshFilter.sharedMesh = result;
+                    meshCollider.sharedMesh = result;
+                    meshRenderer.sharedMaterial = material;
+
+                    meshCollider.enabled = generateCollider;
+                }
             }
 
-            Debug.LogFormat("Parts: {0}, materialCount: {1}, vertices: {2}", decisionParts.Count, meshChunkDict.Count, meshChunkDict.Sum(pair => pair.Value.bentVertices.Count));
+            foreach(var deprecatedTransform in generatedChildren) {
+                if (deprecatedTransform != null)
+                {
+                    if (false == Application.isPlaying) {
+                        GameObject.DestroyImmediate(deprecatedTransform.gameObject);
+                    } else if (updateInPlayMode) {
+                        GameObject.Destroy(deprecatedTransform.gameObject);
+                    }
+                }
+            }
+            generatedChildren = newGeneratedTransform;
         }
     }
 }
