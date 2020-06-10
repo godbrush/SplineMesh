@@ -1,11 +1,17 @@
 {
-    "name": "splinemesh",
-    "references": [],
-    "includePlatforms": [],
+    "name": "SplineMeshEditor",
+    "references": [
+        "Unity.SplineMesh.Runtime"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
-    "precompiledReferences": [],
+    "precompiledReferences": [
+        ""
+    ],
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
