@@ -2,7 +2,8 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SplineMesh {
+namespace SplineMesh
+{
     /// <summary>
     /// It is specialized version of <see cref="SplineMeshTiling"/>'s repeat mode.
     /// Key features:
@@ -12,17 +13,20 @@ namespace SplineMesh {
     [ExecuteInEditMode]
     [SelectionBase]
     [DisallowMultipleComponent]
-    public class SplineMeshTilingExt : MonoBehaviour {
+    public class SplineMeshTilingExt : MonoBehaviour
+    {
 
         [System.Serializable]
-        public enum PlaceType {
+        public enum PlaceType
+        {
             None,
             Sequence,
             Random
         }
 
         [System.Serializable]
-        public struct PartInfo {
+        public struct PartInfo
+        {
             public Mesh mesh;
             public Material material;
             public Vector3 translation;
@@ -48,22 +52,26 @@ namespace SplineMesh {
 
         private bool toUpdate = false;
 
-        private void OnEnable() {
+        private void OnEnable()
+        {
             spline = GetComponentInParent<Spline>();
             spline.NodeListChanged += (s, e) => toUpdate = true;
             spline.CurveChanged.AddListener(() => toUpdate = true);
             toUpdate = true;
         }
 
-        private void OnValidate() {
+        private void OnValidate()
+        {
             if (spline == null) return;
             toUpdate = true;
         }
 
-        private void Update() {
+        private void Update()
+        {
             if (false == updateInPlayMode && Application.isPlaying) return;
 
-            if (toUpdate) {
+            if (toUpdate)
+            {
                 toUpdate = false;
                 CreateMeshes();
             }
@@ -78,7 +86,7 @@ namespace SplineMesh {
             {
                 sourceMeshes = new SourceMesh[meshInfos.Length];
             }
-            for(int i = 0; i < meshInfos.Length; ++i)
+            for (int i = 0; i < meshInfos.Length; ++i)
             {
                 var newSourceMesh = SourceMesh.Build(meshInfos[i].mesh)
                     .Translate(meshInfos[i].translation)
@@ -91,34 +99,23 @@ namespace SplineMesh {
             }
         }
 
-        class MeshChunk {
-            public List<MeshVertex> bentVertices;
-            public List<int> triangles;
-            public List<Vector2>[] uv;
-            public float length;
-        }
-
-        [SerializeField]
-        private List<Transform> generatedChildren = new List<Transform>();
-
-        public void CreateMeshes() {
-            if (null == spline || null == meshInfos || 0 == meshInfos.Length) return;
-
-            UpdateSourceMeshes();
-
+        private void UpdateDecisionParts()
+        {
             decisionParts.Clear();
 
             Random.InitState(Seed);
 
-            for(float d = 0; d <= spline.Length && decisionParts.Count < 1000;) {
+            // Phase 1: Fill w/o backward sequence.
+            for (float d = 0; d <= spline.Length && decisionParts.Count < 1000;)
+            {
                 int sourceMeshIndex = -1;
 
-                // Sequence
-                if (-1 == sourceMeshIndex) {
-                    // TODO: Reverse
+                // Sequence : Forward only
+                if (-1 == sourceMeshIndex)
+                {
                     sourceMeshIndex = System.Array.FindIndex(meshInfos, info =>
                     {
-                        if (PlaceType.Sequence == info.placeType)
+                        if (PlaceType.Sequence == info.placeType && 0 <= info.placeValue)
                         {
                             int seqIndex = Mathf.RoundToInt(info.placeValue);
                             return seqIndex == decisionParts.Count;
@@ -127,7 +124,8 @@ namespace SplineMesh {
                     });
                 }
                 // Random
-                if (-1 == sourceMeshIndex) {
+                if (-1 == sourceMeshIndex)
+                {
                     sourceMeshIndex = System.Array.FindIndex(meshInfos, info =>
                     {
                         if (PlaceType.Random == info.placeType)
@@ -138,36 +136,83 @@ namespace SplineMesh {
                     });
                 }
                 // None
-                if (-1 == sourceMeshIndex) {
+                if (-1 == sourceMeshIndex)
+                {
                     sourceMeshIndex = System.Array.FindIndex(meshInfos, info => PlaceType.None == info.placeType);
                 }
 
-                if (-1 == sourceMeshIndex) {
+                if (-1 == sourceMeshIndex)
+                {
                     sourceMeshIndex = 0;
                 }
 
                 float sourceMeshLength = sourceMeshes[sourceMeshIndex].Length;
 
-                if (Mathf.Approximately(sourceMeshLength, 0)) {
+                if (Mathf.Approximately(sourceMeshLength, 0))
+                {
                     Debug.LogError("SourceMesh.Length is must larger than zero.");
                     return;
                 }
 
                 d += sourceMeshLength;
-                if (d <= spline.Length) {
+                if (d <= spline.Length)
+                {
                     decisionParts.Add(sourceMeshIndex);
                 }
             }
+            // Phase 2: Replace backward sequence.
+            for (int i = 0; i < decisionParts.Count; ++i)
+            {
+                int sourceMeshIndex = decisionParts[i];
+
+                if (PlaceType.Sequence != meshInfos[sourceMeshIndex].placeType)
+                {
+                    int backwardSeqMeshIndex = System.Array.FindIndex(meshInfos, info =>
+                    {
+                        if (PlaceType.Sequence == info.placeType && 0 > Mathf.Sign(info.placeValue))
+                        {
+                            int seqIndex = Mathf.RoundToInt(info.placeValue);
+                            return seqIndex == ((decisionParts.Count - 1) - i);
+                        }
+                        return false;
+                    });
+                    if (-1 != backwardSeqMeshIndex)
+                    {
+                        decisionParts[i] = backwardSeqMeshIndex;
+                    }
+                }
+            }
+        }
+
+        class MeshChunk
+        {
+            public List<MeshVertex> bentVertices;
+            public List<int> triangles;
+            public List<Vector2>[] uv;
+            public float length;
+        }
+
+        [HideInInspector]
+        [SerializeField]
+        private List<Transform> generatedChildren = new List<Transform>();
+
+        public void CreateMeshes()
+        {
+            if (null == spline || null == meshInfos || 0 == meshInfos.Length) return;
+
+            UpdateSourceMeshes();
+            UpdateDecisionParts();
 
             var meshChunkDict = new Dictionary<Material, List<MeshChunk>>();
             var sampleCache = new Dictionary<float, CurveSample>();
 
             float offset = 0;
-            for(int i = 0; i < decisionParts.Count; ++i)
+            for (int i = 0; i < decisionParts.Count; ++i)
             {
                 int index = decisionParts[i];
 
-                if (false == meshChunkDict.ContainsKey(meshInfos[index].material)) {
+                if (false == meshChunkDict.ContainsKey(meshInfos[index].material))
+                {
                     meshChunkDict.Add(meshInfos[index].material, new List<MeshChunk>());
                 }
 
@@ -177,8 +222,10 @@ namespace SplineMesh {
 
                 bool isReachedMaxVertices = 0 < meshChunkList.Count && PerChunkMaxVertices < (meshChunkList.Last().bentVertices.Count + vertexCount);
                 bool isReachedMaxLength = 0 < meshChunkList.Count && PerChunkMaxLength < meshChunkList.Last().length;
-                if (0 == meshChunkList.Count || isReachedMaxVertices || isReachedMaxLength) {
-                    meshChunkList.Add(new MeshChunk() {
+                if (0 == meshChunkList.Count || isReachedMaxVertices || isReachedMaxLength)
+                {
+                    meshChunkList.Add(new MeshChunk()
+                    {
                         bentVertices = new List<MeshVertex>(vertexCount),
                         triangles = new List<int>(vertexCount / 3),
                         uv = new List<Vector2>[8],
@@ -192,26 +239,31 @@ namespace SplineMesh {
 
                 meshChunk.triangles.AddRange(sourceMesh.Triangles.Select(idx => idx + meshChunk.bentVertices.Count));
                 List<Vector2> UV = new List<Vector2>();
-                for(int channel = 0; channel < 8; ++channel) {
+                for (int channel = 0; channel < 8; ++channel)
+                {
                     UV.Clear();
                     sourceMesh.Mesh.GetUVs(channel, UV);
-                    if (sourceMesh.Vertices.Count == UV.Count) {
-                        if (null == meshChunk.uv[channel]) {
-                            meshChunk.uv[channel] = new List<Vector2>(UV);
-                        } else {
-                            meshChunk.uv[channel].AddRange(UV);
+                    if (0 < UV.Count)
+                    {
+                        if (null == meshChunk.uv[channel])
+                        {
+                            meshChunk.uv[channel] = new List<Vector2>();
                         }
-                    } else {
-                        if (null != meshChunk.uv[channel]) {
-                            meshChunk.uv[channel].AddRange(Enumerable.Repeat(Vector2.zero, meshChunk.bentVertices.Count + sourceMesh.Vertices.Count - meshChunk.uv[channel].Count));
+                        int fillCount = Mathf.Max(0, (meshChunk.bentVertices.Count - UV.Count) - meshChunk.uv[channel].Count);
+                        if (0 < fillCount)
+                        {
+                            meshChunk.uv[channel].AddRange(Enumerable.Repeat(Vector2.zero, fillCount));
                         }
+                        meshChunk.uv[channel].AddRange(UV);
                     }
                 }
-                foreach(var vert in sourceMesh.Vertices) {
+                foreach (var vert in sourceMesh.Vertices)
+                {
                     float distance = vert.position.x - sourceMesh.MinX + offset;
 
                     CurveSample sample;
-                    if (false == sampleCache.TryGetValue(distance, out sample)) {
+                    if (false == sampleCache.TryGetValue(distance, out sample))
+                    {
                         sample = spline.GetSampleAtDistance(distance);
                         sampleCache.Add(distance, sample);
                     }
@@ -225,11 +277,13 @@ namespace SplineMesh {
 
             List<Transform> newGeneratedTransform = new List<Transform>();
 
-            foreach(var pair in meshChunkDict) {
+            foreach (var pair in meshChunkDict)
+            {
                 var material = pair.Key;
                 var meshChunkList = pair.Value;
 
-                for (int segment = 0; segment < meshChunkList.Count; ++segment) {
+                for (int segment = 0; segment < meshChunkList.Count; ++segment)
+                {
                     var meshChunk = meshChunkList[segment];
 
                     string chunkName = $"{name}-{material.name}-{segment + 1}";
@@ -257,7 +311,7 @@ namespace SplineMesh {
                     {
                         result = new Mesh();
                     }
-                    else if(result.vertexCount != meshChunk.bentVertices.Count)
+                    else if (result.vertexCount != meshChunk.bentVertices.Count)
                     {
                         result.Clear();
                     }
@@ -273,6 +327,14 @@ namespace SplineMesh {
                     {
                         if (null != meshChunk.uv[channel] && 0 < meshChunk.uv[channel].Count)
                         {
+                            if (null != meshChunk.uv[channel])
+                            {
+                                int fillCount = Mathf.Max(0, meshChunk.bentVertices.Count - meshChunk.uv[channel].Count);
+                                if (0 < fillCount)
+                                {
+                                    meshChunk.uv[channel].AddRange(Enumerable.Repeat(Vector2.zero, fillCount));
+                                }
+                            }
                             result.SetUVs(channel, meshChunk.uv[channel]);
                         }
                     }
@@ -290,12 +352,16 @@ namespace SplineMesh {
                 }
             }
 
-            foreach(var deprecatedTransform in generatedChildren) {
+            foreach (var deprecatedTransform in generatedChildren)
+            {
                 if (deprecatedTransform != null)
                 {
-                    if (false == Application.isPlaying) {
+                    if (false == Application.isPlaying)
+                    {
                         GameObject.DestroyImmediate(deprecatedTransform.gameObject);
-                    } else if (updateInPlayMode) {
+                    }
+                    else if (updateInPlayMode)
+                    {
                         GameObject.Destroy(deprecatedTransform.gameObject);
                     }
                 }
