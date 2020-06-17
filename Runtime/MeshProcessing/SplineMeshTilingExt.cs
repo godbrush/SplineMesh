@@ -21,7 +21,7 @@ namespace SplineMesh
         {
             None,
             Sequence,
-            Random
+            Random,
         }
 
         [System.Serializable]
@@ -37,6 +37,7 @@ namespace SplineMesh
         }
 
         public PartInfo[] meshInfos;
+        public bool stretchScale = false;
 
         public int PerChunkMaxVertices = 65535;
         public float PerChunkMaxLength = 10;
@@ -78,6 +79,8 @@ namespace SplineMesh
         }
 
         private List<int> decisionParts = new List<int>();
+        private List<float> decisionPartsLength = new List<float>();
+        private float partsScale = 1;
         private SourceMesh[] sourceMeshes;
 
         private void UpdateSourceMeshes()
@@ -160,6 +163,8 @@ namespace SplineMesh
                     decisionParts.Add(sourceMeshIndex);
                 }
             }
+
+            float partsLength = 0.0f;
             // Phase 2: Replace backward sequence.
             for (int i = 0; i < decisionParts.Count; ++i)
             {
@@ -179,7 +184,21 @@ namespace SplineMesh
                     if (-1 != backwardSeqMeshIndex)
                     {
                         decisionParts[i] = backwardSeqMeshIndex;
+                        sourceMeshIndex = backwardSeqMeshIndex;
                     }
+                }
+
+                var sourceMeshLength = sourceMeshes[sourceMeshIndex].Length;
+
+                partsLength += sourceMeshLength;
+            }
+
+            partsScale = 1;
+            if (stretchScale)
+            {
+                if (false == Mathf.Approximately(partsLength, spline.Length))
+                {
+                    partsScale = spline.Length / partsLength;
                 }
             }
         }
@@ -257,9 +276,15 @@ namespace SplineMesh
                         meshChunk.uv[channel].AddRange(UV);
                     }
                 }
-                foreach (var vert in sourceMesh.Vertices)
+                foreach (var vertex in sourceMesh.Vertices)
                 {
-                    float distance = vert.position.x - sourceMesh.MinX + offset;
+                    var vert = new MeshVertex(vertex.position, vertex.normal, vertex.uv);
+
+                    vert.position.x *= partsScale;
+
+                    float distance = vert.position.x - sourceMesh.MinX * partsScale + offset;
+
+                    distance = Mathf.Clamp(distance, 0, spline.Length);
 
                     CurveSample sample;
                     if (false == sampleCache.TryGetValue(distance, out sample))
@@ -271,8 +296,8 @@ namespace SplineMesh
                     meshChunk.bentVertices.Add(sample.GetBent(vert));
                 }
 
-                offset += sourceMeshes[index].Length;
-                meshChunk.length += sourceMeshes[index].Length;
+                offset += sourceMeshes[index].Length * partsScale;
+                meshChunk.length += sourceMeshes[index].Length * partsScale;
             }
 
             List<Transform> newGeneratedTransform = new List<Transform>();
