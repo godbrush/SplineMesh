@@ -302,12 +302,11 @@ namespace SplineMesh
                         sample = spline.GetSampleAtDistance(distance);
                         if (heightSync)
                         {
-                            var sampleLocationWS = transform.TransformPoint(sample.location);
+                            var sampleLocationWS = spline.transform.TransformPoint(sample.location);
                             RaycastHit hitInfo;
                             if (Physics.Raycast(sampleLocationWS + Vector3.up * heightSyncTraceRange, -Vector3.up, out hitInfo, heightSyncTraceRange * 2))
                             {
-                                var newSampleLocation = sample.location;
-                                newSampleLocation.y = (transform.worldToLocalMatrix * hitInfo.point).y;
+                                var newSampleLocation = spline.transform.InverseTransformPoint(hitInfo.point);
                                 var newSampleUp = heightNormalSync ? hitInfo.normal : sample.up;
                                 sample = new CurveSample(newSampleLocation, sample.tangent, newSampleUp, sample.scale, sample.roll, sample.distanceInCurve, sample.timeInCurve, sample.curve);
                             }
