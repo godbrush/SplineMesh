@@ -227,6 +227,8 @@ namespace SplineMesh
 
             foreach(var child in generatedChildren)
             {
+                if (null == child) continue;
+
                 var meshCollider = child.GetComponent<MeshCollider>();
                 if (meshCollider) meshCollider.enabled = false;
             }
@@ -307,7 +309,7 @@ namespace SplineMesh
                             if (Physics.Raycast(sampleLocationWS + Vector3.up * heightSyncTraceRange, -Vector3.up, out hitInfo, heightSyncTraceRange * 2))
                             {
                                 var newSampleLocation = spline.transform.InverseTransformPoint(hitInfo.point);
-                                var newSampleUp = heightNormalSync ? hitInfo.normal : sample.up;
+                                var newSampleUp = heightNormalSync ? spline.transform.InverseTransformDirection(hitInfo.normal) : sample.up;
                                 sample = new CurveSample(newSampleLocation, sample.tangent, newSampleUp, sample.scale, sample.roll, sample.distanceInCurve, sample.timeInCurve, sample.curve);
                             }
                         }
@@ -316,6 +318,23 @@ namespace SplineMesh
                     }
 
                     MeshVertex bentVertex = sample.GetBent(vert);
+                    if (heightSync)
+                    {
+                        var bentWS = spline.transform.TransformPoint(bentVertex.position);
+                        var sampleLocationWS = spline.transform.TransformPoint(sample.location);
+                        var sampleUpWS = spline.transform.TransformVector(sample.up);
+
+                        bentWS.y = sampleLocationWS.y;
+
+                        var dotNU = Vector3.Dot(bentVertex.normal, sample.up);
+
+                        RaycastHit hitInfo;
+                        if (Physics.Raycast(bentWS + sampleUpWS * heightSyncTraceRange, -sampleUpWS, out hitInfo, heightSyncTraceRange * 2))
+                        {
+                            bentVertex.position += spline.transform.InverseTransformVector(hitInfo.point - bentWS);
+                            bentVertex.normal = Vector3.Lerp(bentVertex.normal, spline.transform.InverseTransformDirection(hitInfo.normal), dotNU);
+                        }
+                    }
                     meshChunk.bentVertices.Add(bentVertex);
                 }
 
@@ -348,6 +367,7 @@ namespace SplineMesh
                     newGeneratedTransform.Add(chunkTransform);
                     generatedChildren.Remove(chunkTransform);
 
+                    chunkTransform.gameObject.layer = gameObject.layer;
                     chunkTransform.gameObject.isStatic = false == updateInPlayMode;
 
                     var meshFilter = chunkTransform.GetComponent<MeshFilter>();
