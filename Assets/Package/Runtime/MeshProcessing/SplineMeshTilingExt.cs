@@ -39,6 +39,7 @@ namespace SplineMesh
         public PartInfo[] meshInfos;
         public bool stretchScale = true;
         public bool heightSync = false;
+        public bool heightNormalSync = false;
         public float heightSyncTraceRange = 1.0f;
 
         public int PerChunkMaxVertices = 65535;
@@ -306,8 +307,9 @@ namespace SplineMesh
                             if (Physics.Raycast(sampleLocationWS + Vector3.up * heightSyncTraceRange, -Vector3.up, out hitInfo, heightSyncTraceRange * 2))
                             {
                                 var newSampleLocation = sample.location;
-                                newSampleLocation.y = (transform.localToWorldMatrix * hitInfo.point).y;
-                                sample = new CurveSample(newSampleLocation, sample.tangent, sample.up, sample.scale, sample.roll, sample.distanceInCurve, sample.timeInCurve, sample.curve);
+                                newSampleLocation.y = (transform.worldToLocalMatrix * hitInfo.point).y;
+                                var newSampleUp = heightNormalSync ? hitInfo.normal : sample.up;
+                                sample = new CurveSample(newSampleLocation, sample.tangent, newSampleUp, sample.scale, sample.roll, sample.distanceInCurve, sample.timeInCurve, sample.curve);
                             }
                         }
 
