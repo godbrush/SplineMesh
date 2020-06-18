@@ -37,7 +37,9 @@ namespace SplineMesh
         }
 
         public PartInfo[] meshInfos;
-        public bool stretchScale = false;
+        public bool stretchScale = true;
+        public bool heightSync = false;
+        public float heightSyncTraceRange = 1.0f;
 
         public int PerChunkMaxVertices = 65535;
         public float PerChunkMaxLength = 10;
@@ -222,6 +224,12 @@ namespace SplineMesh
             UpdateSourceMeshes();
             UpdateDecisionParts();
 
+            foreach(var child in generatedChildren)
+            {
+                var meshCollider = child.GetComponent<MeshCollider>();
+                if (meshCollider) meshCollider.enabled = false;
+            }
+
             var meshChunkDict = new Dictionary<Material, List<MeshChunk>>();
             var sampleCache = new Dictionary<float, CurveSample>();
 
@@ -276,6 +284,7 @@ namespace SplineMesh
                         meshChunk.uv[channel].AddRange(UV);
                     }
                 }
+
                 foreach (var vertex in sourceMesh.Vertices)
                 {
                     var vert = new MeshVertex(vertex.position, vertex.normal, vertex.uv);
@@ -290,10 +299,23 @@ namespace SplineMesh
                     if (false == sampleCache.TryGetValue(distance, out sample))
                     {
                         sample = spline.GetSampleAtDistance(distance);
+                        if (heightSync)
+                        {
+                            var sampleLocationWS = transform.TransformPoint(sample.location);
+                            RaycastHit hitInfo;
+                            if (Physics.Raycast(sampleLocationWS + Vector3.up * heightSyncTraceRange, -Vector3.up, out hitInfo, heightSyncTraceRange * 2))
+                            {
+                                var newSampleLocation = sample.location;
+                                newSampleLocation.y = (transform.localToWorldMatrix * hitInfo.point).y;
+                                sample = new CurveSample(newSampleLocation, sample.tangent, sample.up, sample.scale, sample.roll, sample.distanceInCurve, sample.timeInCurve, sample.curve);
+                            }
+                        }
+
                         sampleCache.Add(distance, sample);
                     }
 
-                    meshChunk.bentVertices.Add(sample.GetBent(vert));
+                    MeshVertex bentVertex = sample.GetBent(vert);
+                    meshChunk.bentVertices.Add(bentVertex);
                 }
 
                 offset += sourceMeshes[index].Length * partsScale;
