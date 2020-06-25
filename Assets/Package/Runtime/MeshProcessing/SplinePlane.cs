@@ -18,7 +18,7 @@ namespace SplineMesh
         private GameObject generated;
 
         public Material material;
-        public float textureScale = 1;
+        public Vector4 textureOffsetScale = new Vector4(0, 0, 1, 1);
         public float sampleSpacing = 0.1f;
         public float width = 1;
         public float offset = 0;
@@ -84,14 +84,14 @@ namespace SplineMesh
             float x_start = offset - width / 2;
             float x_end = offset + width / 2;
 
-            sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x_start), Vector3.up, new Vector2(0, 0)));
+            sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x_start), Vector3.up, new Vector2(+textureOffsetScale.x, 0)));
             for (int step = 1; step < slice; ++step)
             {
                 float t = (float) step / (float) slice;
                 float x = Mathf.Lerp(x_start, x_end, t);
-                sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x), Vector3.up, new Vector2(t / textureScale, 0)));
+                sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x), Vector3.up, new Vector2(t / textureOffsetScale.z + textureOffsetScale.x, 0)));
             }
-            sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x_end), Vector3.up, new Vector2(1 / textureScale, 0)));
+            sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x_end), Vector3.up, new Vector2(1 / textureOffsetScale.z + textureOffsetScale.x, 0)));
 
             if (Mathf.Approximately(sampleSpacing, 0) || sampleSpacing <= 0)
             {
@@ -136,7 +136,7 @@ namespace SplineMesh
                         }
                     }
 
-                    bentVertex.uv.y = (d / width) / textureScale;
+                    bentVertex.uv.y = (d / width) / textureOffsetScale.w + textureOffsetScale.y;
 
                     bentVertices.Add(bentVertex);
                 }
