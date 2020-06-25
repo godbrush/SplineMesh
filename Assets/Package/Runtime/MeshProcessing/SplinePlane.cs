@@ -89,9 +89,9 @@ namespace SplineMesh
             {
                 float t = (float) step / (float) slice;
                 float x = Mathf.Lerp(x_start, x_end, t);
-                sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x), Vector3.up, new Vector2(t, 0)));
+                sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x), Vector3.up, new Vector2(t / textureScale, 0)));
             }
-            sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x_end), Vector3.up, new Vector2(1, 0)));
+            sourceVertices.Add(new MeshVertex(new Vector3(0, 0, x_end), Vector3.up, new Vector2(1 / textureScale, 0)));
 
             if (Mathf.Approximately(sampleSpacing, 0) || sampleSpacing <= 0)
             {
@@ -136,7 +136,7 @@ namespace SplineMesh
                         }
                     }
 
-                    bentVertex.uv.y = Mathf.Repeat(d * textureScale, 1);
+                    bentVertex.uv.y = (d / width) / textureScale;
 
                     bentVertices.Add(bentVertex);
                 }
