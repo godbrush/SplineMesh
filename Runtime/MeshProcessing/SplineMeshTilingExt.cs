@@ -57,6 +57,25 @@ namespace SplineMesh
 
         private bool toUpdate = false;
 
+        private void Reset()
+        {
+#if UNITY_EDITOR
+            if (Application.isPlaying) return;
+            
+            var defaultCubeGO = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var defaultPartInfo = new PartInfo()
+            {
+                mesh = defaultCubeGO.GetComponent<MeshFilter>().sharedMesh,
+                material = defaultCubeGO.GetComponent<MeshRenderer>().sharedMaterial,
+                scale = Vector3.one
+            };
+            DestroyImmediate(defaultCubeGO);
+            meshInfos = new PartInfo[] {
+                defaultPartInfo
+            };
+#endif
+        }
+
         private void OnEnable()
         {
             spline = GetComponentInParent<Spline>();
